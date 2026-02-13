@@ -1,6 +1,12 @@
+# venv
 myenv/
-venv/
-.env/
-.venv/
+
+# python cache
 __pycache__/
 *.pyc
+
+# pyinstaller
+build/
+dist/
+*.spec
+
