@@ -1,10 +1,24 @@
 import pymysql
 
+# ---------------------------
+# CONFIG (change these)
+# ---------------------------
+DB_HOST = "localhost"
+DB_USER = "root"
+DB_PASS = "changed"
+DB_NAME = "db10"
+
+# ✅ You create this admin and share creds manually
+ADMIN_NAME = "Company"
+ADMIN_EMAIL = "admin@company.com"
+ADMIN_PASSWORD = "Admin@123"  # keep simple for demo; later you can hash
+
+
 conn = pymysql.connect(
-    host="localhost",
-    user="root",
-    password="changed",
-    database="db10",
+    host=DB_HOST,
+    user=DB_USER,
+    password=DB_PASS,
+    database=DB_NAME,
     autocommit=True
 )
 
@@ -91,15 +105,42 @@ CREATE TABLE IF NOT EXISTS professor_course_requests (
     UNIQUE KEY unique_request (professor_name, course_name)
 ) ENGINE=InnoDB;
 """
-
-
-
 ]
+
+
+def seed_single_admin(cur):
+    """
+    Ensures there is exactly ONE admin user + admin table row.
+    If an admin exists, do nothing.
+    If not, create one using ADMIN_* constants.
+    """
+    # 1) check if admin exists
+    cur.execute("SELECT user_id, email FROM users WHERE role='admin' LIMIT 1;")
+    row = cur.fetchone()
+    if row:
+        print(f"✅ Admin already exists: user_id={row[0]}, email={row[1]}")
+        return
+
+    # 2) create admin user
+    cur.execute(
+        "INSERT INTO users (user_name, password, email, role, mobile_no) VALUES (%s, %s, %s, %s, %s);",
+        (ADMIN_NAME, ADMIN_PASSWORD, ADMIN_EMAIL, "admin", "0000000000")
+    )
+    admin_user_id = cur.lastrowid
+
+    # 3) create admin table record
+    cur.execute("INSERT INTO admin (admin_id) VALUES (%s);", (admin_user_id,))
+
+    print("✅ Admin created successfully:")
+    print("   Email:", ADMIN_EMAIL)
+    print("   Password:", ADMIN_PASSWORD)
 
 
 with conn.cursor() as cur:
     for q in tables_sql:
         cur.execute(q)
+
+    seed_single_admin(cur)
 
 conn.close()
 print("All tables created successfully.")

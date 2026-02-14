@@ -1,5 +1,12 @@
+import sys
+import os
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import tkinter as tk
 from panels import init_ui, open_auth_window
+
+
 
 root = tk.Tk()
 root.title("Student App")

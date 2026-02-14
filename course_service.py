@@ -1,4 +1,7 @@
+from os import name
 from db import DB
+import re
+
 
 def cap(text: str) -> str:
     return (text or "").strip().title()
@@ -26,6 +29,45 @@ class CourseService:
             (email,),
             fetchone=True
         )
+    def _validate_name(self, name: str):
+     name = (name or "").strip()
+
+     if not name:
+        return False, "Name is required."
+
+    # Only letters and spaces allowed
+     if not re.match(r"^[A-Za-z ]+$", name):
+        return False, "Name must contain only alphabets and spaces."
+
+     if len(name) < 2:
+        return False, "Name is too short."
+
+     if len(name) > 30:
+        return False, "Name is too long."
+
+     return True, ""
+
+    
+    def _validate_email(self, email: str, required: bool = True):
+        email = (email or "").strip().lower()
+
+        if required and not email:
+            return False, "Email is required."
+
+        if not email:
+            return True, ""
+
+        # Basic, practical email check (good enough for UI + DB apps)
+        # Examples accepted: a@b.com, john.doe+1@gmail.com
+        pattern = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+        if not re.match(pattern, email):
+            return False, "Invalid email format. Example: name@example.com"
+
+        if len(email) > 150:
+            return False, "Email is too long."
+
+        return True, ""
+
 
     def _validate_mobile(self, mobile_no: str, required: bool = False):
         mobile_no = (mobile_no or "").strip()
@@ -75,12 +117,24 @@ class CourseService:
         user_name = cap(user_name)
         email = (email or "").strip().lower()
         password = (password or "").strip()
+        if role == "admin":
+          return False, "Admin account cannot be registered from the app."
+
 
         if role not in ("admin", "professor", "student"):
             return False, "Invalid role."
 
         if not user_name or not email or not password:
             return False, "Name, email and password are required."
+        
+        ok_n, msg = self._validate_name(user_name)
+        if not ok_n:
+         return False, msg
+
+        
+        ok_e, msg = self._validate_email(email, required=True)
+        if not ok_e:
+            return False, msg
 
         ok_m, msg = self._validate_mobile(mobile_no, required=False)
         if not ok_m:
@@ -119,6 +173,10 @@ class CourseService:
     def login_user(self, email, password, role):
         email = (email or "").strip().lower()
         password = (password or "").strip()
+
+        ok_e, msg = self._validate_email(email, required=True)
+        if not ok_e:
+            return False, msg
 
         row = self._get_user_by_email(email)
         if not row:

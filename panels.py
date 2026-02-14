@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
+import re
 
 from course_service import CourseService
 
@@ -17,6 +18,13 @@ def init_ui(root: tk.Tk):
 
 def cap(text: str) -> str:
     return (text or "").strip().title()
+
+
+# -------------------- Validators --------------------
+def is_valid_email(email: str) -> bool:
+    email = (email or "").strip().lower()
+    pattern = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+    return bool(re.match(pattern, email))
 
 
 def validate_person_name_input(P):
@@ -130,9 +138,6 @@ def open_auth_window(root, role: str):
 
     tk.Label(win, text=f"{cap(role)} Authentication", font=("Arial", 15, "bold")).pack(pady=12)
 
-    switch = tk.Frame(win)
-    switch.pack(pady=5)
-
     body = tk.Frame(win)
     body.pack(fill="both", expand=True, padx=18, pady=10)
 
@@ -142,6 +147,7 @@ def open_auth_window(root, role: str):
 
     def show_login():
         clear_body()
+
         tk.Label(body, text="Login", font=("Arial", 12, "bold")).grid(row=0, column=0, columnspan=2, pady=6)
 
         tk.Label(body, text="Email:").grid(row=1, column=0, sticky="e", pady=6)
@@ -153,7 +159,20 @@ def open_auth_window(root, role: str):
         e_pass.grid(row=2, column=1, pady=6)
 
         def do_login():
-            ok, res = service.login_user(e_email.get(), e_pass.get(), role)
+            email = (e_email.get() or "").strip().lower()
+            password = (e_pass.get() or "").strip()
+
+            if not email:
+                messagebox.showwarning("Login Failed", "Email is required.", parent=win)
+                return
+            if not is_valid_email(email):
+                messagebox.showwarning("Login Failed", "Invalid email format. Example: name@example.com", parent=win)
+                return
+            if not password:
+                messagebox.showwarning("Login Failed", "Password is required.", parent=win)
+                return
+
+            ok, res = service.login_user(email, password, role)
             if not ok:
                 messagebox.showwarning("Login Failed", str(res), parent=win)
                 return
@@ -166,10 +185,26 @@ def open_auth_window(root, role: str):
             else:
                 open_student_panel(root, res)
 
-        tk.Button(body, text="Login", width=16, command=do_login).grid(row=3, column=0, columnspan=2, pady=12)
+        tk.Button(body, text="Login", width=16, command=do_login).grid(row=3, column=0, columnspan=2, pady=10)
+
+        # ✅ Only professor/student can register (button below form)
+        if role != "admin":
+            tk.Button(body, text="Register Instead", width=16, command=show_register)\
+                .grid(row=4, column=0, columnspan=2, pady=4)
 
     def show_register():
+        # ✅ Hard block admin registration
+        if role == "admin":
+            messagebox.showinfo(
+                "Not Allowed",
+                "Admin account is created by the system owner.\nAdmin can only login.",
+                parent=win
+            )
+            show_login()
+            return
+
         clear_body()
+
         tk.Label(body, text="Register", font=("Arial", 12, "bold")).grid(row=0, column=0, columnspan=2, pady=6)
 
         tk.Label(body, text="Name:").grid(row=1, column=0, sticky="e", pady=6)
@@ -189,28 +224,45 @@ def open_auth_window(root, role: str):
         e_pass.grid(row=4, column=1, pady=6)
 
         def do_register():
-            ok, res = service.register_user(
-                e_name.get(),
-                e_email.get(),
-                e_pass.get(),
-                role,
-                e_mobile.get()
-            )
+            name = (e_name.get() or "").strip()
+            email = (e_email.get() or "").strip().lower()
+            mobile = (e_mobile.get() or "").strip()
+            password = (e_pass.get() or "").strip()
+
+            if not name:
+                messagebox.showwarning("Register Failed", "Name is required.", parent=win)
+                return
+            if not email:
+                messagebox.showwarning("Register Failed", "Email is required.", parent=win)
+                return
+            if not is_valid_email(email):
+                messagebox.showwarning("Register Failed", "Invalid email format. Example: name@example.com", parent=win)
+                return
+            if not mobile:
+                messagebox.showwarning("Register Failed", "Mobile is required.", parent=win)
+                return
+            if not password:
+                messagebox.showwarning("Register Failed", "Password is required.", parent=win)
+                return
+
+            ok, res = service.register_user(name, email, password, role, mobile)
             if not ok:
                 messagebox.showwarning("Register Failed", str(res), parent=win)
                 return
 
             if role == "professor":
-                messagebox.showinfo("Registered", "Professor account created.\nStatus: waiting (admin must approve).", parent=win)
+                messagebox.showinfo(
+                    "Registered",
+                    "Professor account created.\nStatus: waiting (admin must approve).",
+                    parent=win
+                )
             else:
                 messagebox.showinfo("Registered", "Account created. Now login.", parent=win)
 
             show_login()
 
-        tk.Button(body, text="Register", width=16, command=do_register).grid(row=5, column=0, columnspan=2, pady=12)
-
-    tk.Button(switch, text="Login", width=12, command=show_login).pack(side="left", padx=8)
-    tk.Button(switch, text="Register", width=12, command=show_register).pack(side="left", padx=8)
+        tk.Button(body, text="Register", width=16, command=do_register).grid(row=5, column=0, columnspan=2, pady=10)
+        tk.Button(body, text="Back to Login", width=16, command=show_login).grid(row=6, column=0, columnspan=2, pady=4)
 
     show_login()
 
@@ -223,7 +275,11 @@ def open_admin_panel(root, user_ctx):
     win.resizable(False, False)
     win.protocol("WM_DELETE_WINDOW", root.destroy)
 
-    tk.Label(win, text=f"Admin Panel | Logged in: {user_ctx['user_name']}", font=("Arial", 14, "bold")).pack(pady=10)
+    tk.Label(
+        win,
+        text=f"Admin Panel | Logged in: {user_ctx['user_name']}",
+        font=("Arial", 14, "bold")
+    ).pack(pady=10)
 
     # -------- Courses --------
     tk.Label(win, text="Courses", font=("Arial", 12, "bold")).pack(pady=(6, 0))
@@ -293,8 +349,10 @@ def open_admin_panel(root, user_ctx):
     btn_frame.pack(pady=8)
     tk.Button(btn_frame, text="Add Course", width=24, command=add_course).grid(row=0, column=0, padx=10, pady=6)
     tk.Button(btn_frame, text="Delete Course", width=24, command=delete_course).grid(row=0, column=1, padx=10, pady=6)
-    tk.Button(btn_frame, text="Enroll Student (Dropdown)", width=24, command=enroll_student_dropdown).grid(row=1, column=0, padx=10, pady=6)
-    tk.Button(btn_frame, text="Assign Professor (Dropdown)", width=24, command=assign_professor_dropdown).grid(row=1, column=1, padx=10, pady=6)
+    tk.Button(btn_frame, text="Enroll Student (Dropdown)", width=24, command=enroll_student_dropdown)\
+        .grid(row=1, column=0, padx=10, pady=6)
+    tk.Button(btn_frame, text="Assign Professor (Dropdown)", width=24, command=assign_professor_dropdown)\
+        .grid(row=1, column=1, padx=10, pady=6)
 
     # -------- Professor approvals --------
     tk.Label(win, text="Professor Accounts (waiting)", font=("Arial", 12, "bold")).pack(pady=(14, 0))
@@ -339,7 +397,12 @@ def open_admin_panel(root, user_ctx):
     tk.Button(prof_btn, text="Approve", width=12, command=approve_prof).pack(side="left", padx=10)
     tk.Button(prof_btn, text="Reject", width=12, command=reject_prof).pack(side="left", padx=10)
 
-    tk.Button(win, text="Logout", width=12, command=lambda: [win.destroy(), open_auth_window(root, "admin")]).pack(pady=12)
+    tk.Button(
+        win,
+        text="Logout",
+        width=12,
+        command=lambda: [win.destroy(), open_auth_window(root, "admin")]
+    ).pack(pady=12)
 
     refresh_courses()
     refresh_prof_waiting()
@@ -395,7 +458,12 @@ def open_professor_panel(root, user_ctx):
     tk.Button(win, text="View Students in Course", width=32, command=professor_view_students).pack(pady=10)
     tk.Button(win, text="Upload Student Grade (Dropdown)", width=32, command=professor_upload_grade).pack(pady=10)
 
-    tk.Button(win, text="Logout", width=12, command=lambda: [win.destroy(), open_auth_window(root, "professor")]).pack(pady=15)
+    tk.Button(
+        win,
+        text="Logout",
+        width=12,
+        command=lambda: [win.destroy(), open_auth_window(root, "professor")]
+    ).pack(pady=15)
 
 
 # ======================= STUDENT PANEL =======================
@@ -416,9 +484,11 @@ def open_student_panel(root, user_ctx):
         if not course:
             return
         ok = service.enroll_student_by_id(student_id, cap(course))
-        messagebox.showinfo("Enrolled" if ok else "Failed",
-                            f"{student_name} -> {cap(course)}" if ok else "Course not found / DB error.",
-                            parent=win)
+        messagebox.showinfo(
+            "Enrolled" if ok else "Failed",
+            f"{student_name} -> {cap(course)}" if ok else "Course not found / DB error.",
+            parent=win
+        )
 
     def student_view_courses():
         rows = service.view_student_courses_by_id(student_id) or []
@@ -436,4 +506,9 @@ def open_student_panel(root, user_ctx):
     tk.Button(win, text="View My Courses", width=32, command=student_view_courses).pack(pady=10)
     tk.Button(win, text="View My Grade", width=32, command=student_view_grade).pack(pady=10)
 
-    tk.Button(win, text="Logout", width=12, command=lambda: [win.destroy(), open_auth_window(root, "student")]).pack(pady=15)
+    tk.Button(
+        win,
+        text="Logout",
+        width=12,
+        command=lambda: [win.destroy(), open_auth_window(root, "student")]
+    ).pack(pady=15)
